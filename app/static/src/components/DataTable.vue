@@ -169,7 +169,7 @@ function formatCell(value: any, format?: string): string {
     case 'number':
       return typeof value === 'number' ? value.toLocaleString() : String(value)
     case 'date':
-      return value ? new Date(value).toLocaleString('zh-CN') : '-'
+      return value ? new Date(value.replace(' ', 'T') + '+08:00').toLocaleString('zh-CN') : '-'
     case 'status':
       return value === 1 ? '启用' : '禁用'
     default:

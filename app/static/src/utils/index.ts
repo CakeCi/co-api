@@ -8,7 +8,7 @@ export function formatNumber(num: number): string {
 }
 
 export function formatDateTime(dateStr: string): string {
-  return new Date(dateStr).toLocaleString('zh-CN')
+  return new Date(dateStr.replace(' ', 'T') + '+08:00').toLocaleString('zh-CN')
 }
 
 export function maskSecret(key: string): string {
