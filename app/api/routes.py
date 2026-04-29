@@ -1448,7 +1448,7 @@ async def process_chat_request(request: Request, db: AsyncSession, body: dict, a
 
     sorted_priorities = sorted(candidates_by_priority)
     for priority_index, priority in enumerate(sorted_priorities):
-        group = weighted_order(candidates_by_priority[priority])
+        group = candidates_by_priority[priority]
         healthy_group = [(ch, alias, weight) for ch, alias, weight in group if not is_circuit_open(ch.id, alias) and not is_soft_cooldown_open(ch.id, alias)]
         if healthy_group:
             group = healthy_group
@@ -1712,6 +1712,15 @@ async def process_chat_request(request: Request, db: AsyncSession, body: dict, a
                 except httpx.HTTPError as e:
                     last_error = e
                     error_text = str(e) or e.__class__.__name__
+                    # Non-transient HTTP errors (4xx, 503) — skip retries, go to next channel
+                    if isinstance(e, httpx.HTTPStatusError) and e.response is not None:
+                        status_code = e.response.status_code
+                        if 400 <= status_code < 500 and status_code != 429:
+                            attempts.append(build_attempt(ch, alias, priority, try_idx, False, e))
+                            break
+                        if status_code == 503:
+                            attempts.append(build_attempt(ch, alias, priority, try_idx, False, e))
+                            break
                     # Xfyun SSE errors that are not retryable on the same channel
                     if "SSE error:" in error_text and not is_xfyun_error_retryable(error_text):
                         attempts.append(build_attempt(ch, alias, priority, try_idx, False, e))
