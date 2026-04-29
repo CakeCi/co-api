@@ -66,6 +66,8 @@ async def init_db():
             await conn.execute(text("ALTER TABLE channels ADD COLUMN custom_headers TEXT"))
         if "proxy_url" not in ch_columns:
             await conn.execute(text("ALTER TABLE channels ADD COLUMN proxy_url VARCHAR(512)"))
+        if "reasoning_levels" not in ch_columns:
+            await conn.execute(text("ALTER TABLE channels ADD COLUMN reasoning_levels VARCHAR(128) DEFAULT 'low,medium,high'"))
         
         # Check columns in model_pools
         result = await conn.execute(text("PRAGMA table_info(model_pools)"))

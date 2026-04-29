@@ -7,6 +7,7 @@ export interface Channel {
   models: string[]
   api_type: string
   status: number
+  reasoning_levels?: string
   created_at?: string
 }
 

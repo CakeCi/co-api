@@ -626,6 +626,7 @@ def serialize_channel(ch: Channel) -> dict:
         "models": models_to_list(ch.models),
         "api_type": ch.api_type,
         "status": ch.status,
+        "reasoning_levels": ch.reasoning_levels or "low,medium,high",
         "created_at": str(ch.created_at) if ch.created_at else None,
     }
 
@@ -640,6 +641,7 @@ async def create_channel(data: dict, request: Request, db: AsyncSession = Depend
         models=parse_models(data.get("models", "")),
         api_type=data.get("api_type", "openai"),
         status=data.get("status", 1),
+        reasoning_levels=data.get("reasoning_levels", "low,medium,high"),
     )
     db.add(ch)
     await db.commit()
@@ -664,6 +666,8 @@ async def update_channel(channel_id: int, data: dict, request: Request, db: Asyn
         ch.models = parse_models(data["models"])
     if "base_url" in data:
         ch.base_url = (data.get("base_url") or "").rstrip("/")
+    if "reasoning_levels" in data:
+        ch.reasoning_levels = data["reasoning_levels"]
     await db.commit()
     invalidate_channels()
     return {"success": True, "message": "渠道更新成功"}
@@ -2593,12 +2597,18 @@ async def generate_opencode_models(request: Request, db: AsyncSession = Depends(
             "variants": {"low": {}, "medium": {}, "high": {}}
         }
 
+    ch_levels = {ch.name: (ch.reasoning_levels or "low,medium,high").split(",") for ch in channels}
+
     for mid in sorted(model_channels.keys()):
         chs = model_channels[mid]
         ctx = next((v for k, v in context_limits.items() if k in mid.lower()), 131072)
         out = next((v for k, v in output_limits.items() if k in mid.lower()), 32768)
+        levels = set()
+        for ch_name in chs:
+            levels.update(ch_levels.get(ch_name, ["low", "medium", "high"]))
+        variants = {l: {} for l in sorted(levels, key=lambda x: ["low", "medium", "high", "xhigh"].index(x) if x in ["low", "medium", "high", "xhigh"] else 99)}
         entry = {"name": f"{', '.join(chs)}/{mid}", "limit": {"context": ctx, "output": out}}
-        entry["variants"] = {"low": {}, "medium": {}, "high": {}}
+        entry["variants"] = variants
         models[mid] = entry
 
     return {"success": True, "data": models}

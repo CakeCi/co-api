@@ -233,10 +233,15 @@
             <label class="block text-xs text-dim mb-1">基础地址</label>
             <input v-model="form.base_url" class="form-input" placeholder="https://api.openai.com" />
           </div>
-          <div>
-            <label class="block text-xs text-dim mb-1">模型 (逗号分隔)</label>
-            <input v-model="form.models" class="form-input" placeholder="gpt-3.5-turbo,gpt-4" />
-          </div>
+      <div>
+        <label class="block text-xs text-dim mb-1">模型 (逗号分隔)</label>
+        <input v-model="form.models" class="form-input" placeholder="gpt-3.5-turbo,gpt-4" />
+      </div>
+      <div>
+        <label class="block text-xs text-dim mb-1">思考强度选项 (逗号分隔)</label>
+        <input v-model="form.reasoning_levels" class="form-input" placeholder="low,medium,high" />
+        <p class="text-xs text-dim mt-1">支持 xhigh 的渠道可设为 low,medium,high,xhigh</p>
+      </div>
         </div>
 
         <!-- 预设模式只显示只读信息 -->
@@ -396,7 +401,8 @@ const form = ref({
   api_type: 'openai',
   base_url: 'https://api.openai.com',
   api_key: '',
-  models: 'gpt-3.5-turbo,gpt-4'
+  models: 'gpt-3.5-turbo,gpt-4',
+  reasoning_levels: 'low,medium,high'
 })
 
 async function loadChannels(page = 1) {
@@ -432,7 +438,8 @@ function openCreateModal() {
     api_type: 'openai',
     base_url: 'https://api.openai.com',
     api_key: '',
-    models: 'gpt-3.5-turbo,gpt-4'
+    models: 'gpt-3.5-turbo,gpt-4',
+    reasoning_levels: 'low,medium,high'
   }
   showModal.value = true
 }
@@ -440,7 +447,7 @@ function openCreateModal() {
 function onPresetSelect(key: string) {
   selectedPreset.value = key
   if (!key) {
-    form.value = { name: '', api_type: 'openai', base_url: 'https://api.openai.com', api_key: '', models: '' }
+    form.value = { name: '', api_type: 'openai', base_url: 'https://api.openai.com', api_key: '', models: '', reasoning_levels: 'low,medium,high' }
     return
   }
   const preset = presets[key]
@@ -459,7 +466,8 @@ function editChannel(channel: Channel) {
     api_type: channel.api_type || 'openai',
     base_url: channel.base_url,
     api_key: '',
-    models: channel.models?.join(',') || ''
+    models: channel.models?.join(',') || '',
+    reasoning_levels: channel.reasoning_levels || 'low,medium,high'
   }
   showModal.value = true
 }

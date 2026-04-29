@@ -21,6 +21,7 @@ class Channel(Base):
     status = Column(Integer, default=1)
     custom_headers = Column(Text, nullable=True)
     proxy_url = Column(String(512), nullable=True)
+    reasoning_levels = Column(String(128), nullable=False, default="low,medium,high")
     created_at = Column(DateTime, server_default=func.now())
 
 class Token(Base):
