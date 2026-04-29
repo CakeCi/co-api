@@ -40,9 +40,11 @@ async def _upsert_stats(session, model, index_col, index_val, data: dict):
     """SQLite atomic upsert using INSERT ... ON CONFLICT DO UPDATE."""
     from sqlalchemy import text
     table_name = model.__tablename__
-    columns = data.keys()
-    col_str = ", ".join(columns)
-    placeholders = ", ".join([f":{c}" for c in columns])
+    columns = list(data.keys())
+    # Include index column in INSERT
+    all_columns = [index_col] + columns
+    col_str = ", ".join(all_columns)
+    placeholders = ", ".join([f":{c}" for c in all_columns])
     set_str = ", ".join([
         f"{c} = excluded.{c}"
         if c not in ("request_count", "success_count", "fail_count", "input_tokens", "output_tokens")

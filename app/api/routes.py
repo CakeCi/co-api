@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import case, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_token, decode_token, hash_password, verify_password
@@ -667,7 +667,7 @@ async def update_channel(channel_id: int, data: dict, request: Request, db: Asyn
     if "base_url" in data:
         ch.base_url = (data.get("base_url") or "").rstrip("/")
     if "reasoning_levels" in data:
-        ch.reasoning_levels = data["reasoning_levels"]
+        ch.reasoning_levels = data["reasoning_levels"] or "low,medium,high"
     await db.commit()
     invalidate_channels()
     return {"success": True, "message": "渠道更新成功"}
@@ -1915,84 +1915,70 @@ async def create_images(request: Request, db: AsyncSession = Depends(get_db)):
 async def dashboard_stats(request: Request, db: AsyncSession = Depends(get_db)):
     require_admin(request)
 
-    # Use pre-aggregated stats_daily for fast totals (single query)
     today_str = datetime.now().strftime("%Y-%m-%d")
     seven_days_ago = datetime.now() - timedelta(days=7)
+    seven_days = [(datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(6, -1, -1)]
 
-    # Get today's stats from stats_daily (instant lookup)
-    today_result = await db.execute(select(StatsDaily).where(StatsDaily.date == today_str))
-    today_row = today_result.scalar_one_or_none()
-
-    # Get 7-day stats from stats_daily for totals
-    seven_days = []
-    for i in range(6, -1, -1):
-        d = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
-        seven_days.append(d)
-    daily_result = await db.execute(
-        select(StatsDaily).where(StatsDaily.date.in_(seven_days)).order_by(StatsDaily.date)
+    # Aggregate all totals from request_logs for the 7-day window (accurate, fast enough)
+    agg_result = await db.execute(
+        select(
+            func.sum(RequestLog.prompt_tokens),
+            func.sum(RequestLog.completion_tokens),
+            func.sum(RequestLog.total_tokens),
+            func.count(RequestLog.id),
+            func.sum(case((RequestLog.status == 1, 1), else_=0)),
+            func.sum(case((RequestLog.status == 0, 1), else_=0)),
+            func.sum(case((RequestLog.status == 1, RequestLog.total_tokens), else_=0)),
+            func.sum(case((RequestLog.status == 1, RequestLog.prompt_tokens), else_=0)),
+            func.sum(case((RequestLog.status == 1, RequestLog.completion_tokens), else_=0)),
+            func.sum(RequestLog.estimated_prompt_tokens),
+            func.sum(RequestLog.estimated_completion_tokens),
+            func.sum(case((RequestLog.status == 0, RequestLog.estimated_prompt_tokens), else_=0)),
+            func.sum(case((RequestLog.status == 0, RequestLog.estimated_completion_tokens), else_=0)),
+        ).where(RequestLog.created_at >= seven_days_ago)
     )
-    daily_rows = {r.date: r for r in daily_result.scalars().all()}
+    r = agg_result.one_or_none()
+    if r and r[0] is not None:
+        prompt_tokens = r[0] or 0
+        completion_tokens = r[1] or 0
+        total_tokens = prompt_tokens + completion_tokens
+        total_requests = r[3] or 0
+        success_requests = r[4] or 0
+        failed_requests = r[5] or 0
+        success_tokens = r[6] or 0
+        success_prompt_tokens = r[7] or 0
+        success_completion_tokens = r[8] or 0
+        estimated_prompt_tokens = r[9] or 0
+        estimated_completion_tokens = r[10] or 0
+        estimated_tokens = estimated_prompt_tokens + estimated_completion_tokens
+        failed_estimated_prompt_tokens = r[11] or 0
+        failed_estimated_completion_tokens = r[12] or 0
+        failed_estimated_tokens = failed_estimated_prompt_tokens + failed_estimated_completion_tokens
+    else:
+        prompt_tokens = completion_tokens = total_tokens = 0
+        total_requests = success_requests = failed_requests = 0
+        success_tokens = success_prompt_tokens = success_completion_tokens = 0
+        estimated_prompt_tokens = estimated_completion_tokens = estimated_tokens = 0
+        failed_estimated_prompt_tokens = failed_estimated_completion_tokens = failed_estimated_tokens = 0
 
-    # Aggregate totals from stats_daily (fast)
-    total_requests = sum(r.request_count for r in daily_rows.values())
-    success_requests = sum(r.success_count for r in daily_rows.values())
-    failed_requests = sum(r.fail_count for r in daily_rows.values())
-    total_tokens = sum(r.input_tokens + r.output_tokens for r in daily_rows.values())
-    prompt_tokens = sum(r.input_tokens for r in daily_rows.values())
-    completion_tokens = sum(r.output_tokens for r in daily_rows.values())
+    failure_rate = round((failed_requests / total_requests) * 100, 2) if total_requests else 0
 
-    # Trend from request_logs (uses created_at index, accurate for all historical data)
-    request_scope = final_request_filter()
+    # 7-day trend from request_logs
     trend_result = await db.execute(
         select(func.date(RequestLog.created_at).label("date"), func.count(RequestLog.id).label("count"))
-        .where(request_scope, RequestLog.created_at >= seven_days_ago)
+        .where(RequestLog.created_at >= seven_days_ago)
         .group_by(func.date(RequestLog.created_at))
         .order_by(func.date(RequestLog.created_at))
     )
     trend_map = {str(row[0]): row[1] for row in trend_result.all()}
     trend = [{"date": d, "count": trend_map.get(d, 0)} for d in seven_days]
 
-    # Today stats
-    today_requests = today_row.request_count if today_row else 0
-    failure_rate = round((failed_requests / total_requests) * 100, 2) if total_requests else 0
-
-    # Success/failed token breakdown: need raw logs query (only for these 2 fields)
-    request_scope = final_request_filter()
-    success_tokens_result = await db.execute(
-        select(func.sum(RequestLog.total_tokens)).where(request_scope, RequestLog.status == 1)
+    # Today stats from request_logs
+    today_agg = await db.execute(
+        select(func.count(RequestLog.id))
+        .where(func.date(RequestLog.created_at) == today_str)
     )
-    success_tokens = success_tokens_result.scalar() or 0
-    success_prompt_tokens_result = await db.execute(
-        select(func.sum(RequestLog.prompt_tokens)).where(request_scope, RequestLog.status == 1)
-    )
-    success_prompt_tokens = success_prompt_tokens_result.scalar() or 0
-    success_completion_tokens_result = await db.execute(
-        select(func.sum(RequestLog.completion_tokens)).where(request_scope, RequestLog.status == 1)
-    )
-    success_completion_tokens = success_completion_tokens_result.scalar() or 0
-
-    # Estimated tokens from raw logs (single combined query)
-    est_all_result = await db.execute(
-        select(
-            func.sum(RequestLog.estimated_prompt_tokens),
-            func.sum(RequestLog.estimated_completion_tokens),
-        ).where(request_scope)
-    )
-    est_all = est_all_result.one_or_none()
-    estimated_prompt_tokens = est_all[0] or 0 if est_all else 0
-    estimated_completion_tokens = est_all[1] or 0 if est_all else 0
-    estimated_tokens = estimated_prompt_tokens + estimated_completion_tokens
-
-    est_fail_result = await db.execute(
-        select(
-            func.sum(RequestLog.estimated_prompt_tokens),
-            func.sum(RequestLog.estimated_completion_tokens),
-        ).where(request_scope, RequestLog.status == 0)
-    )
-    est_fail = est_fail_result.one_or_none()
-    failed_estimated_prompt_tokens = est_fail[0] or 0 if est_fail else 0
-    failed_estimated_completion_tokens = est_fail[1] or 0 if est_fail else 0
-    failed_estimated_tokens = failed_estimated_prompt_tokens + failed_estimated_completion_tokens
+    today_requests = today_agg.scalar() or 0
 
     # Fast lookups (not from logs)
     active_channels_result = await db.execute(select(func.count(Channel.id)).where(Channel.status == 1))
@@ -2573,7 +2559,7 @@ async def generate_opencode_models(request: Request, db: AsyncSession = Depends(
         for mid in models_to_list(ch.models):
             model_channels.setdefault(mid, []).append(ch.name)
 
-    context_limits = {"gemini": 1000000, "kimi": 256000, "grok": 131072,
+    context_limits = {"gpt-5.4": 1000000, "gemini": 1000000, "kimi": 256000, "grok": 131072,
         "deepseek": 65536, "mimo": 131072, "doubao": 131072,
         "minimax": 1000000, "glm": 256000, "gpt": 131072,
         "astron": 92160, "kimi-for-coding": 262144}

@@ -238,9 +238,9 @@
         <input v-model="form.models" class="form-input" placeholder="gpt-3.5-turbo,gpt-4" />
       </div>
       <div>
-        <label class="block text-xs text-dim mb-1">思考强度选项 (逗号分隔)</label>
-        <input v-model="form.reasoning_levels" class="form-input" placeholder="low,medium,high" />
-        <p class="text-xs text-dim mt-1">支持 xhigh 的渠道可设为 low,medium,high,xhigh</p>
+        <label class="block text-xs text-dim mb-1">思考强度选项 (可选，逗号分隔)</label>
+        <input v-model="form.reasoning_levels" class="form-input" placeholder="留空则默认 low,medium,high" />
+        <p class="text-xs text-dim mt-1">如 low,medium,high,xhigh</p>
       </div>
         </div>
 
@@ -486,7 +486,7 @@ async function saveChannel() {
   saving.value = true
   try {
     const models = form.value.models.split(',').map(s => s.trim()).filter(Boolean)
-    const data = { ...form.value, models }
+    const data = { ...form.value, models, reasoning_levels: form.value.reasoning_levels || 'low,medium,high' }
     let channelId = editingId.value
     if (editingId.value) {
       await updateChannel(editingId.value, data)
