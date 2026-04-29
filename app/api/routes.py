@@ -2590,7 +2590,7 @@ async def generate_opencode_models(request: Request, db: AsyncSession = Depends(
         models[pool.name] = {
             "name": f"{pool.name} (Pool: {members_str})",
             "limit": {"context": 256000, "output": 32768},
-            "variants": {"low": {}, "medium": {}, "high": {}, "xhigh": {}}
+            "variants": {"low": {}, "medium": {}, "high": {}}
         }
 
     for mid in sorted(model_channels.keys()):
@@ -2598,7 +2598,7 @@ async def generate_opencode_models(request: Request, db: AsyncSession = Depends(
         ctx = next((v for k, v in context_limits.items() if k in mid.lower()), 131072)
         out = next((v for k, v in output_limits.items() if k in mid.lower()), 32768)
         entry = {"name": f"{', '.join(chs)}/{mid}", "limit": {"context": ctx, "output": out}}
-        entry["variants"] = {"low": {}, "medium": {}, "high": {}, "xhigh": {}}
+        entry["variants"] = {"low": {}, "medium": {}, "high": {}}
         models[mid] = entry
 
     return {"success": True, "data": models}
