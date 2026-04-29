@@ -1159,6 +1159,9 @@ def build_upstream_request(ch: Channel, alias: str | None, model: str, body: dic
         url = f"{base_url}/v1/chat/completions"
 
     headers = {"Authorization": f"Bearer {ch.api_key}", "Content-Type": "application/json"}
+    # Kimi Coding's OpenAI endpoint checks User-Agent to verify coding agent identity
+    if "api.kimi.com" in base_url and "/coding" in base_url and ch.api_type == "openai" and "User-Agent" not in headers:
+        headers["User-Agent"] = "claude-code/0.1.2"
     # Parse and add custom headers from channel config
     if ch.custom_headers:
         try:
