@@ -2575,7 +2575,12 @@ async def generate_opencode_models(request: Request, db: AsyncSession = Depends(
         "astron": 92160, "kimi-for-coding": 262144}
     output_limits = {"gemini": 65536, "grok": 32768}
     reasoning_kw = ("grok-4-thinking", "grok-3-thinking", "grok-4.1-thinking",
-        "grok-4-heavy", "kimi-k2.6", "kimi-k2.5", "kimi-for-coding", "deepseek-v3.2")
+        "grok-4-heavy", "grok-3", "grok-4", "grok-4.1-expert", "grok-4.1-fast", "grok-4.1-mini",
+        "grok-4.20-beta", "kimi-k2.6", "kimi-k2.5", "kimi-for-coding", "deepseek-v3.2",
+        "gpt-5", "gemini-2.5", "gemini-3", "glm-5.1", "glm-4.7",
+        "mimo-v2-pro", "mimo-v2-omni", "mimo-v2-flash",
+        "minimax-m2", "doubao-seed",
+        "astron-code-latest")
 
     pools = (await db.execute(select(ModelPool))).scalars().all()
     pool_members_cache = {}
