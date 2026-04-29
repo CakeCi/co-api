@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     port: int = 3000
     debug: bool = False
     db_url: str = "sqlite+aiosqlite:///./data/coapi.db"
-    jwt_secret: str = "co-api-secret-change-me-please"
+    jwt_secret: str = ""  # auto-generated on first startup if empty
     jwt_expiry: int = 30  # days
 
     # Relay retry/fallback settings

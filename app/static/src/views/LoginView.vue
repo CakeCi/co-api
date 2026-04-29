@@ -25,7 +25,6 @@
       <TerminalButton class="w-full" :loading="loading" @click="handleLogin">
         [ 登录 ]
       </TerminalButton>
-      <p class="text-xs text-center mt-4 opacity-50">默认: admin / Admin@1234</p>
     </div>
   </div>
 </template>
@@ -40,7 +39,7 @@ const router = useRouter()
 const authStore = useAuthStore()
 
 const username = ref('admin')
-const password = ref('Admin@1234')
+const password = ref('')
 const error = ref('')
 const loading = ref(false)
 

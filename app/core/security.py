@@ -1,9 +1,14 @@
 import bcrypt
+import secrets
+import os
 from datetime import datetime, timedelta, timezone
 from jose import jwt
 from app.config import settings
 
 SECRET_KEY = settings.jwt_secret
+if not SECRET_KEY:
+    SECRET_KEY = os.environ.get("JWT_SECRET") or secrets.token_hex(32)
+    print(f"[security] auto-generated JWT secret")
 ALGORITHM = "HS256"
 
 def hash_password(pwd: str) -> str:

@@ -21,12 +21,15 @@ async def init_db():
         result = await session.execute(select(func.count(User.id)))
         count = result.scalar() or 0
         if count == 0:
+            import secrets
+            default_pwd = secrets.token_urlsafe(12)
             default_user = User(
                 username="admin",
-                password_hash=hash_password("Admin@1234")
+                password_hash=hash_password(default_pwd)
             )
             session.add(default_user)
             await session.commit()
+            print(f"[init] default admin created: admin / {default_pwd}")
     # SQLite schema migration: add missing columns if not present
     async with engine.begin() as conn:
         from sqlalchemy import text
