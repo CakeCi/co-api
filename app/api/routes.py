@@ -2558,3 +2558,49 @@ async def sync_channel_models(channel_id: int, request: Request, db: AsyncSessio
         return {"success": True, "data": {"models": models, "count": len(models)}}
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"同步失败: {str(e)[:500]}")
+
+
+@router.get("/api/opencode-models")
+async def generate_opencode_models(request: Request, db: AsyncSession = Depends(get_db)):
+    require_admin(request)
+    channels = (await db.execute(select(Channel).where(Channel.status == 1).order_by(Channel.id))).scalars().all()
+    model_channels: dict[str, list[str]] = {}
+    for ch in channels:
+        for mid in models_to_list(ch.models):
+            model_channels.setdefault(mid, []).append(ch.name)
+
+    context_limits = {"gemini": 1000000, "kimi": 256000, "grok": 131072,
+        "deepseek": 65536, "mimo": 131072, "doubao": 131072,
+        "minimax": 1000000, "glm": 256000, "gpt": 131072,
+        "astron": 92160, "kimi-for-coding": 262144}
+    output_limits = {"gemini": 65536, "grok": 32768}
+    reasoning_kw = ("grok-4-thinking", "grok-3-thinking", "grok-4.1-thinking",
+        "grok-4-heavy", "kimi-k2.6", "kimi-k2.5", "kimi-for-coding", "deepseek-v3.2")
+
+    pools = (await db.execute(select(ModelPool))).scalars().all()
+    pool_members_cache = {}
+    for pool in pools:
+        members = (await db.execute(
+            select(PoolMember, Channel.name).join(Channel, PoolMember.channel_id == Channel.id)
+            .where(PoolMember.pool_id == pool.id)
+        )).all()
+        pool_members_cache[pool.name] = [f"{m.name}/{m.PoolMember.alias or pool.name}" for m in members]
+
+    models = {}
+    for pool in pools:
+        members_str = ", ".join(pool_members_cache.get(pool.name, []))
+        models[pool.name] = {
+            "name": f"{pool.name} (Pool: {members_str})",
+            "limit": {"context": 256000, "output": 32768}
+        }
+
+    for mid in sorted(model_channels.keys()):
+        chs = model_channels[mid]
+        ctx = next((v for k, v in context_limits.items() if k in mid.lower()), 131072)
+        out = next((v for k, v in output_limits.items() if k in mid.lower()), 32768)
+        entry = {"name": f"{', '.join(chs)}/{mid}", "limit": {"context": ctx, "output": out}}
+        if any(kw in mid for kw in reasoning_kw):
+            entry["variants"] = {"low": {}, "medium": {}, "high": {}}
+        models[mid] = entry
+
+    return {"success": True, "data": models}
