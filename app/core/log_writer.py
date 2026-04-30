@@ -78,7 +78,13 @@ async def _update_statistics(session, item: dict):
     channel_id = item.get("channel_id")
     token_id = item.get("token_id")
 
-    now = datetime.now()
+    completed_at = item.get("completed_at")
+    if isinstance(completed_at, datetime):
+        now = completed_at
+    elif isinstance(completed_at, str):
+        now = datetime.fromisoformat(completed_at)
+    else:
+        now = datetime.now()
     hour_str = now.strftime("%Y-%m-%d_%H")
     date_str = now.strftime("%Y-%m-%d")
 
@@ -180,6 +186,7 @@ async def _flush_logs_one_by_one(items: list[dict]):
 
 def enqueue_log(**kwargs) -> None:
     """将日志放入异步队列，不阻塞调用者。"""
+    kwargs.setdefault("completed_at", datetime.now())
     try:
         _log_queue.put_nowait(kwargs)
     except asyncio.QueueFull:
