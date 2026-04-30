@@ -60,12 +60,14 @@ class RequestLog(Base):
     error_msg = Column(String(512), nullable=True)
     request_body = Column(Text, nullable=True)
     response_body = Column(Text, nullable=True)
+    completed_at = Column(DateTime, nullable=True, index=True)
     created_at = Column(DateTime, server_default=func.now())
     
     __table_args__ = (
         Index('ix_request_log_composite', 'token_id', 'model', 'created_at'),
         Index('ix_request_log_channel', 'channel_id', 'created_at'),
         Index('ix_request_log_status_created', 'status', 'created_at'),
+        Index('ix_request_log_completed_at', 'completed_at'),
     )
 
 class ModelPool(Base):

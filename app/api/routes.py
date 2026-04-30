@@ -1918,6 +1918,7 @@ async def dashboard_stats(request: Request, db: AsyncSession = Depends(get_db)):
     today_str = datetime.now().strftime("%Y-%m-%d")
     seven_days_ago = datetime.now() - timedelta(days=7)
     seven_days = [(datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(6, -1, -1)]
+    request_time = func.coalesce(RequestLog.completed_at, RequestLog.created_at)
 
     # Aggregate all totals from request_logs for the 7-day window (accurate, fast enough)
     agg_result = await db.execute(
@@ -1935,7 +1936,7 @@ async def dashboard_stats(request: Request, db: AsyncSession = Depends(get_db)):
             func.sum(RequestLog.estimated_completion_tokens),
             func.sum(case((RequestLog.status == 0, RequestLog.estimated_prompt_tokens), else_=0)),
             func.sum(case((RequestLog.status == 0, RequestLog.estimated_completion_tokens), else_=0)),
-        ).where(RequestLog.created_at >= seven_days_ago)
+        ).where(request_time >= seven_days_ago)
     )
     r = agg_result.one_or_none()
     if r and r[0] is not None:
@@ -1965,10 +1966,10 @@ async def dashboard_stats(request: Request, db: AsyncSession = Depends(get_db)):
 
     # 7-day trend from request_logs
     trend_result = await db.execute(
-        select(func.date(RequestLog.created_at).label("date"), func.count(RequestLog.id).label("count"))
-        .where(RequestLog.created_at >= seven_days_ago)
-        .group_by(func.date(RequestLog.created_at))
-        .order_by(func.date(RequestLog.created_at))
+        select(func.date(request_time).label("date"), func.count(RequestLog.id).label("count"))
+        .where(request_time >= seven_days_ago)
+        .group_by(func.date(request_time))
+        .order_by(func.date(request_time))
     )
     trend_map = {str(row[0]): row[1] for row in trend_result.all()}
     trend = [{"date": d, "count": trend_map.get(d, 0)} for d in seven_days]
@@ -1976,7 +1977,7 @@ async def dashboard_stats(request: Request, db: AsyncSession = Depends(get_db)):
     # Today stats from request_logs
     today_agg = await db.execute(
         select(func.count(RequestLog.id))
-        .where(func.date(RequestLog.created_at) == today_str)
+        .where(func.date(request_time) == today_str)
     )
     today_requests = today_agg.scalar() or 0
 

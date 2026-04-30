@@ -58,6 +58,9 @@ async def init_db():
             await conn.execute(text("ALTER TABLE request_logs ADD COLUMN original_estimated_prompt_tokens INTEGER DEFAULT 0"))
         if "compacted_estimated_prompt_tokens" not in columns:
             await conn.execute(text("ALTER TABLE request_logs ADD COLUMN compacted_estimated_prompt_tokens INTEGER DEFAULT 0"))
+        if "completed_at" not in columns:
+            await conn.execute(text("ALTER TABLE request_logs ADD COLUMN completed_at DATETIME"))
+            await conn.execute(text("UPDATE request_logs SET completed_at = created_at WHERE completed_at IS NULL"))
         
         # Check columns in channels
         result = await conn.execute(text("PRAGMA table_info(channels)"))
@@ -77,6 +80,7 @@ async def init_db():
         
         # Create performance indexes
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_request_log_created_at ON request_logs(created_at)"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_request_log_completed_at ON request_logs(completed_at)"))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_request_log_channel_id ON request_logs(channel_id)"))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_pool_members_channel_id ON pool_members(channel_id)"))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_request_log_composite ON request_logs(token_id, model, created_at)"))

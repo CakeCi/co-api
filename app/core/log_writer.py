@@ -36,6 +36,18 @@ def _prepare_log(item: dict) -> dict:
     return {key: value for key, value in item.items() if key in _log_columns}
 
 
+def _parse_completed_at(item: dict) -> datetime:
+    completed_at = item.get("completed_at")
+    if isinstance(completed_at, datetime):
+        return completed_at
+    if isinstance(completed_at, str):
+        try:
+            return datetime.fromisoformat(completed_at)
+        except ValueError:
+            pass
+    return datetime.now()
+
+
 async def _upsert_stats(session, model, index_col, index_val, data: dict):
     """SQLite atomic upsert using INSERT ... ON CONFLICT DO UPDATE."""
     from sqlalchemy import text
@@ -78,13 +90,7 @@ async def _update_statistics(session, item: dict):
     channel_id = item.get("channel_id")
     token_id = item.get("token_id")
 
-    completed_at = item.get("completed_at")
-    if isinstance(completed_at, datetime):
-        now = completed_at
-    elif isinstance(completed_at, str):
-        now = datetime.fromisoformat(completed_at)
-    else:
-        now = datetime.now()
+    now = _parse_completed_at(item)
     hour_str = now.strftime("%Y-%m-%d_%H")
     date_str = now.strftime("%Y-%m-%d")
 
